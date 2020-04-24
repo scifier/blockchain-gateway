@@ -1,0 +1,30 @@
+{
+  "name": "blockchain-gateway",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --require dotenv/config index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scifier/blockchain-gateway.git"
+  },
+  "keywords": [],
+  "author": "scifier <radu.nita@mail.ru> (https://scifier.dev)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/scifier/blockchain-gateway/issues"
+  },
+  "homepage": "https://github.com/scifier/blockchain-gateway#readme",
+  "dependencies": {
+    "blockcypher": "^0.2.0",
+    "dotenv": "^8.2.0"
+  },
+  "devDependencies": {
+    "eslint": "^6.8.0",
+    "eslint-config-airbnb-base": "^14.1.0",
+    "eslint-plugin-import": "^2.20.2"
+  }
+}
