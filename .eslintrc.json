@@ -16,7 +16,6 @@
   },
   "rules": {
     "no-plusplus": "off",
-    "no-unused-vars": "off",
     "no-console": "off"
   }
 }
