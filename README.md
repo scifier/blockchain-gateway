@@ -11,8 +11,12 @@ cd blockchain-gateway
 npm install
 
 # Prepare your environment
-echo "BLOCKCYPHER_TOKEN=yourBlockCypherAccessToken" > .env
+echo "BLOCKCYPHER_TOKEN=$YOUR_ACCESS_TOKEN" > .env
+echo "NETWORK_TYPE=mainnet" >> .env
+echo "SENDER_WIF=$COMPRESSED_WIF_PRIVATE_KEY" >> .env
+echo "AMOUNT=$AMOUNT_TO_SEND" >> .env
+echo "MAX_FEE=$MAXIMUM_FEE_PAID_TO_MINERS" >> .env
 
-# Run the project
+# Run the project (will automatically make a $AMOUNT_TO_SEND self-transaction and broadcast)
 npm run start
 ```
