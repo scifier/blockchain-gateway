@@ -19,7 +19,8 @@
   },
   "homepage": "https://github.com/scifier/blockchain-gateway#readme",
   "dependencies": {
-    "blockcypher": "^0.2.0",
+    "axios": "^0.19.2",
+    "bitcoinjs-lib": "^5.1.7",
     "dotenv": "^8.2.0"
   },
   "devDependencies": {

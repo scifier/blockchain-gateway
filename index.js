@@ -1,28 +1,218 @@
-const BlockCypher = require('blockcypher');
-const util = require('util');
+const axios = require('axios');
+const bitcoin = require('bitcoinjs-lib');
 
-const { BLOCKCYPHER_TOKEN } = process.env;
+const { BlockCypherError } = require('./errors');
+
+const {
+  BLOCKCYPHER_TOKEN,
+  NETWORK_TYPE,
+  SENDER_WIF,
+  AMOUNT,
+  FEE,
+} = process.env;
+const API_BASE = 'https://api.blockcypher.com/v1';
 const COIN = 'btc';
-const CHAIN = 'main';
 
-const callbackApi = new BlockCypher(COIN, CHAIN, BLOCKCYPHER_TOKEN);
-const blockcypher = {};
 
-Object.keys(BlockCypher.prototype).forEach((methodName) => {
-  if (methodName.charAt(0) !== '_') {
-    blockcypher[methodName] = util.promisify(callbackApi[methodName].bind(callbackApi));
+/**
+ * Wrapper for get requests
+ *
+ * @param {string} path
+ * @param {object} options
+ *
+ * @returns BlockCypher Api response
+ */
+async function _get(path, options = {}) {
+  const chain = (options && options.networkType === 'testnet') ? 'test3' : 'main';
+  const endpoint = `${API_BASE}/${COIN}/${chain}/${path}`;
+  const params = options;
+  delete params.networkType;
+
+  try {
+    const { data } = await axios.get(endpoint, { params });
+    return data;
+  } catch (err) {
+    throw new BlockCypherError(err);
   }
-});
+}
+
+
+/**
+ * Wrapper for post requests
+ *
+ * @param {string} path
+ * @param {object} options
+ *
+ * @returns BlockCypher Api response
+ */
+async function _post(path, options = {}) {
+  const chain = (options && options.networkType === 'testnet') ? 'test3' : 'main';
+  const endpoint = `${API_BASE}/${COIN}/${chain}/${path}`;
+  const requestObject = options;
+  delete requestObject.networkType;
+
+  try {
+    const { data } = await axios.post(endpoint, requestObject, { token: BLOCKCYPHER_TOKEN });
+    return data;
+  } catch (err) {
+    throw new BlockCypherError(err);
+  }
+}
+
+
+/**
+ * Get bitcoinjs-lib network from network type
+ * @param {string} networkType testnet | mainnet
+ *
+ * @returns network object
+ */
+function getNetwork(networkType) {
+  return (networkType === 'testnet')
+    ? bitcoin.networks.testnet
+    : bitcoin.networks.bitcoin;
+}
+
+
+/**
+ * Get new ECPair from private key
+ *
+ * @param {string} privateKey uncompressed private key
+ * @param {string} networkType testnet | mainnet
+ *
+ * @returns {object} new bitcoin ECPair
+ */
+function getKeypairFromPrivateKey(privateKey, networkType) {
+  const network = getNetwork(networkType);
+  return bitcoin.ECPair.fromPrivateKey(
+    Buffer.from(privateKey, 'hex'),
+    { compressed: true, network },
+  );
+}
+
+
+/**
+ * Get new ECPair from WIF
+ *
+ * @param {string} wif compressed WIF private key
+ * @param {string} networkType testnet | mainnet
+ *
+ * @returns {object} new bitcoin ECPair
+ */
+function getKeypairFromWif(wif, networkType) {
+  const network = getNetwork(networkType);
+  return bitcoin.ECPair.fromWIF(wif, network);
+}
+
+
+/**
+ * Get address of a given ECPair
+ *
+ * @param {object} keyPair bitcoin ECPair
+ * @param {string} networkType testnet | mainnet
+ *
+ * @returns {object} new bitcoin ECPair
+ */
+function getAddressFromKeypair(keyPair, networkType) {
+  // TODO: make use of networkType or remove it
+  const { address } = bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey });
+  return address;
+}
+
+
+function getAddressInfo(address, params = {}) {
+  return _get(`addrs/${address}`, params);
+}
+
+
+async function getUtxo(address) {
+  const { txrefs } = await getAddressInfo(address, { unspentOnly: true });
+  return txrefs;
+}
+
+
+function getTx(txHash, params = {}) {
+  return _get(`txs/${txHash}`, params);
+}
+
+
+async function getRawTx(txHash) {
+  const { hex } = await getTx(txHash, { includeHex: true });
+  return hex;
+}
+
+
+/**
+ * check if it's a Segwit or Non-Segwit transaction
+ */
+function isSegwit(rawTransaction) {
+  return rawTransaction.substring(8, 12) === '0001';
+}
+
+
+function pushRawTx(rawTransaction) {
+  return _post('txs/push', { tx: rawTransaction });
+}
+
 
 (async () => {
-  const blockNumber = 300000;
+  const keypair = getKeypairFromWif(SENDER_WIF, NETWORK_TYPE);
+  const address = getAddressFromKeypair(keypair);
+  console.log('Your public key is', keypair.publicKey.toString('hex'));
+  console.log('Your address is', address);
+  console.log('=====');
 
-  const chain = await blockcypher.getChain();
-  console.log('Current chain', chain);
 
-  let blockHeigh = await blockcypher.getBlock(blockNumber, null);
-  console.log('Block height without any optional URL params', blockHeigh);
+  console.log('Fetching list of your unspent transaction outputs...');
+  const utxos = await getUtxo(address);
+  console.log('Your UTXOs:', utxos);
+  console.log('=====');
 
-  blockHeigh = await blockcypher.getBlock(blockNumber, { txstart: 2 });
-  console.log('Block with an optional "txstart" param', blockHeigh);
+
+  // TODO: select utxo correctly
+  let [selectedUtxo] = utxos;
+  for (const utxo of utxos) {
+    if (utxo.value < selectedUtxo.value) {
+      selectedUtxo = utxo;
+    }
+  }
+
+
+  const rawTransaction = await getRawTx(selectedUtxo.tx_hash);
+  console.log('Origin raw transaction:', rawTransaction);
+  console.log('=====');
+  if (!isSegwit(rawTransaction)) {
+    throw new Error('Non Segwit transactions are not supported currently');
+  }
+
+
+  const psbt = new bitcoin.Psbt({ network: getNetwork(NETWORK_TYPE) });
+  psbt.addInput({
+    hash: selectedUtxo.tx_hash, // tx id
+    index: selectedUtxo.tx_output_n, // vout
+    nonWitnessUtxo: Buffer.from(rawTransaction, 'hex'), // for non Segwit txs only
+    // redeemScript: Buffer.from(unspentOutput.redeemScript, 'hex') // currently is not supported
+  });
+  psbt.addOutput({
+    address,
+    value: AMOUNT,
+  });
+  if (AMOUNT + FEE < selectedUtxo.value) {
+    // Return the rest back to the sender as additional output
+    // TODO: need to check if this is a self-tx (to minimize outputs)
+    psbt.addOutput({
+      address,
+      value: selectedUtxo.value - AMOUNT - FEE,
+    });
+  }
+
+
+  // Sign transaction
+  psbt.signInput(0, keypair);
+  psbt.finalizeAllInputs();
+  const newRawTx = psbt.extractTransaction().toHex();
+  console.log('Transaction was signed. Raw tx hex:', newRawTx);
+  console.log('=====');
+
+
+  console.log('Transaction broadcasted', await pushRawTx(newRawTx));
 })();
