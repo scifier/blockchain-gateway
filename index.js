@@ -74,6 +74,17 @@ function getNetwork(networkType) {
 
 
 /**
+ * Get byte price estimations
+ *
+ * @param {object} options
+ */
+async function getBytePrice(options = {}) {
+  const data = await _get('', options);
+  return Math.floor(data.low_fee_per_kb / 1024);
+}
+
+
+/**
  * Get new ECPair from private key
  *
  * @param {string} privateKey uncompressed private key
