@@ -1,7 +1,7 @@
 const axios = require('axios');
 const bitcoin = require('bitcoinjs-lib');
 
-const { BlockCypherError } = require('./errors');
+const BlockCypherClient = require('./BlockCypherClient');
 
 const {
   BLOCKCYPHER_TOKEN,
@@ -10,54 +10,6 @@ const {
   AMOUNT,
   FEE,
 } = process.env;
-const API_BASE = 'https://api.blockcypher.com/v1';
-const COIN = 'btc';
-
-
-/**
- * Wrapper for get requests
- *
- * @param {string} path
- * @param {object} options
- *
- * @returns BlockCypher Api response
- */
-async function _get(path, options = {}) {
-  const chain = (options && options.networkType === 'testnet') ? 'test3' : 'main';
-  const endpoint = `${API_BASE}/${COIN}/${chain}/${path}`;
-  const params = options;
-  delete params.networkType;
-
-  try {
-    const { data } = await axios.get(endpoint, { params });
-    return data;
-  } catch (err) {
-    throw new BlockCypherError(err);
-  }
-}
-
-
-/**
- * Wrapper for post requests
- *
- * @param {string} path
- * @param {object} options
- *
- * @returns BlockCypher Api response
- */
-async function _post(path, options = {}) {
-  const chain = (options && options.networkType === 'testnet') ? 'test3' : 'main';
-  const endpoint = `${API_BASE}/${COIN}/${chain}/${path}`;
-  const requestObject = options;
-  delete requestObject.networkType;
-
-  try {
-    const { data } = await axios.post(endpoint, requestObject, { token: BLOCKCYPHER_TOKEN });
-    return data;
-  } catch (err) {
-    throw new BlockCypherError(err);
-  }
-}
 
 
 /**
@@ -70,17 +22,6 @@ function getNetwork(networkType) {
   return (networkType === 'testnet')
     ? bitcoin.networks.testnet
     : bitcoin.networks.bitcoin;
-}
-
-
-/**
- * Get byte price estimations
- *
- * @param {object} options
- */
-async function getDustPrice(options = {}) {
-  const data = await _get('', options);
-  return Math.floor(data.low_fee_per_kb / 1024);
 }
 
 
@@ -124,31 +65,9 @@ function getKeypairFromWif(wif, networkType) {
  * @returns {object} new bitcoin ECPair
  */
 function getAddressFromKeypair(keyPair, networkType) {
-  // TODO: make use of networkType or remove it
-  const { address } = bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey });
+  const network = getNetwork(networkType);
+  const { address } = bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey, network });
   return address;
-}
-
-
-function getAddressInfo(address, params = {}) {
-  return _get(`addrs/${address}`, params);
-}
-
-
-async function getUtxo(address) {
-  const { txrefs } = await getAddressInfo(address, { unspentOnly: true, includeScript: true });
-  return txrefs;
-}
-
-
-function getTx(txHash, params = {}) {
-  return _get(`txs/${txHash}`, params);
-}
-
-
-async function getRawTx(txHash) {
-  const { hex } = await getTx(txHash, { includeHex: true });
-  return hex;
 }
 
 
@@ -160,21 +79,18 @@ function isSegwit(rawTransaction) {
 }
 
 
-function pushRawTx(rawTransaction) {
-  return _post('txs/push', { tx: rawTransaction });
-}
-
-
 (async () => {
+  const bcc = new BlockCypherClient({ networkType: NETWORK_TYPE, accessToken: BLOCKCYPHER_TOKEN });
+
   const keypair = getKeypairFromWif(SENDER_WIF, NETWORK_TYPE);
-  const address = getAddressFromKeypair(keypair);
+  const address = getAddressFromKeypair(keypair, NETWORK_TYPE);
   console.log('Your public key is', keypair.publicKey.toString('hex'));
   console.log('Your address is', address);
   console.log('=====');
 
 
   console.log('Fetching list of your unspent transaction outputs...');
-  const utxos = await getUtxo(address);
+  const utxos = await bcc.getUtxo(address);
   console.log('Your UTXOs:', utxos);
   console.log('=====');
 
@@ -188,7 +104,7 @@ function pushRawTx(rawTransaction) {
   }
 
   // const rawTransaction = await getRawTx(selectedUtxo.tx_hash);
-  const parentTx = await getTx(selectedUtxo.tx_hash, { includeHex: true });
+  const parentTx = await bcc.getTx(selectedUtxo.tx_hash, { includeHex: true });
   const rawTransaction = parentTx.hex;
   console.log('PARENT TX', parentTx);
 
@@ -244,5 +160,5 @@ function pushRawTx(rawTransaction) {
   console.log('=====');
 
 
-  console.log('Transaction broadcasted', await pushRawTx(newRawTx));
+  console.log('Transaction broadcasted', await bcc.pushRawTx(newRawTx));
 })();
