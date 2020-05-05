@@ -130,7 +130,7 @@ class BitcoinNetwork extends AbstractNetwork {
       }
     }
 
-    const rawTransaction = await getRawTx(selectedUtxo.tx_hash);
+    const rawTransaction = await this.rpc.getRawTx(selectedUtxo.tx_hash);
     const psbt = new bitcoin.Psbt({ network });
 
     const input = {
@@ -174,7 +174,7 @@ class BitcoinNetwork extends AbstractNetwork {
   }
 
 
-  async sendSignedTransaction(rawTransaction) {
+  async broadcastTransaction(rawTransaction) {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');
     }
