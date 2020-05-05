@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const { BlockCypherError } = require('./errors');
+const BlockCypherError = require('./errors/BlockCypherError');
 
 
 /**
@@ -82,7 +82,7 @@ class BlockCypherClient {
    *
    * @returns {number} byte price in Satoshi
    */
-  async getFees() {
+  async getBytePrice() {
     const data = await this._get('');
     return Math.floor(data.low_fee_per_kb / 1024);
   }

@@ -16,6 +16,4 @@ class BlockCypherError extends Error {
   }
 }
 
-module.exports = {
-  BlockCypherError,
-};
+module.exports = BlockCypherError;
