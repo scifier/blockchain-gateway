@@ -218,18 +218,18 @@ function pushRawTx(rawTransaction) {
 
   const output = {
     address,
-    value: AMOUNT,
+    value: Number(AMOUNT),
     // script: ??
   };
   console.log('Created output:', output);
 
   psbt.addOutput(output);
-  if (AMOUNT + FEE < selectedUtxo.value) {
+  if (Number(AMOUNT) + Number(FEE) < selectedUtxo.value) {
     // Return the rest back to the sender as additional output
     // TODO: need to check if this is a self-tx (to minimize outputs)
     const change = {
       address,
-      value: selectedUtxo.value - AMOUNT - FEE,
+      value: selectedUtxo.value - Number(AMOUNT) - Number(FEE),
     };
     console.log('Your change:', change);
     psbt.addOutput(change);
