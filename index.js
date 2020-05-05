@@ -78,7 +78,7 @@ function getNetwork(networkType) {
  *
  * @param {object} options
  */
-async function getBytePrice(options = {}) {
+async function getDustPrice(options = {}) {
   const data = await _get('', options);
   return Math.floor(data.low_fee_per_kb / 1024);
 }
@@ -136,7 +136,7 @@ function getAddressInfo(address, params = {}) {
 
 
 async function getUtxo(address) {
-  const { txrefs } = await getAddressInfo(address, { unspentOnly: true });
+  const { txrefs } = await getAddressInfo(address, { unspentOnly: true, includeScript: true });
   return txrefs;
 }
 
@@ -187,33 +187,52 @@ function pushRawTx(rawTransaction) {
     }
   }
 
+  // const rawTransaction = await getRawTx(selectedUtxo.tx_hash);
+  const parentTx = await getTx(selectedUtxo.tx_hash, { includeHex: true });
+  const rawTransaction = parentTx.hex;
+  console.log('PARENT TX', parentTx);
 
-  const rawTransaction = await getRawTx(selectedUtxo.tx_hash);
   console.log('Origin raw transaction:', rawTransaction);
   console.log('=====');
-  if (!isSegwit(rawTransaction)) {
-    throw new Error('Non Segwit transactions are not supported currently');
-  }
-
 
   const psbt = new bitcoin.Psbt({ network: getNetwork(NETWORK_TYPE) });
-  psbt.addInput({
+  const input = {
     hash: selectedUtxo.tx_hash, // tx id
     index: selectedUtxo.tx_output_n, // vout
-    nonWitnessUtxo: Buffer.from(rawTransaction, 'hex'), // for non Segwit txs only
-    // redeemScript: Buffer.from(unspentOutput.redeemScript, 'hex') // currently is not supported
-  });
-  psbt.addOutput({
+  };
+
+  if (isSegwit(rawTransaction)) {
+    input.witnessUtxo = {
+      script: Buffer.from(selectedUtxo.script, 'hex'),
+      value: selectedUtxo.value,
+    };
+    // Not featured: input.witnessScript (A Buffer of the witnessScript for P2WSH)
+  } else {
+    input.nonWitnessUtxo = Buffer.from(rawTransaction, 'hex');
+  }
+  // Not featured: input.redeemScript (A Buffer of the redeemScript for P2SH)
+  console.log('Used input:', input);
+
+
+  psbt.addInput(input);
+
+  const output = {
     address,
     value: AMOUNT,
-  });
+    // script: ??
+  };
+  console.log('Created output:', output);
+
+  psbt.addOutput(output);
   if (AMOUNT + FEE < selectedUtxo.value) {
     // Return the rest back to the sender as additional output
     // TODO: need to check if this is a self-tx (to minimize outputs)
-    psbt.addOutput({
+    const change = {
       address,
       value: selectedUtxo.value - AMOUNT - FEE,
-    });
+    };
+    console.log('Your change:', change);
+    psbt.addOutput(change);
   }
 
 
