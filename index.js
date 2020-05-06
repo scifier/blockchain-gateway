@@ -6,8 +6,8 @@ const {
   INFURA_TOKEN,
   NETWORK_TYPE,
   SENDER_WIF,
+  RECIPIENT_ADDRESS,
   AMOUNT,
-  FEE,
 } = process.env;
 
 
@@ -35,7 +35,7 @@ const {
   console.log('=====');
 
   const tx = await bitcoin.createTransaction(
-    bitcoin.defaultAccount, bitcoin.defaultAccount, AMOUNT, FEE,
+    bitcoin.defaultAccount, RECIPIENT_ADDRESS, AMOUNT,
   );
   console.log('Transaction was created. tx:', tx);
   console.log('=====');
