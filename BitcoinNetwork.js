@@ -1,6 +1,7 @@
 const bitcoin = require('bitcoinjs-lib');
+const BigNumber = require('bignumber.js');
 
-const { delay } = require('./utils');
+const { delay, normalize } = require('./utils');
 const AbstractNetwork = require('./AbstractNetwork');
 const BlockCypherClient = require('./BlockCypherClient');
 
@@ -77,6 +78,8 @@ class BitcoinNetwork extends AbstractNetwork {
     // Update defaultAccount
     this.signTransaction = async (tx) => {
       await tx.signAllInputsAsync(keyPair);
+      // NOTE: sign inputs with signInputAsync() for debugging
+      // await Promise.all(tx.data.inputs.map((_, i) => tx.signInputAsync(i, keyPair)));
       tx.finalizeAllInputs();
       return tx.extractTransaction().toHex();
     };
@@ -90,6 +93,8 @@ class BitcoinNetwork extends AbstractNetwork {
     const keyPair = bitcoin.ECPair.makeRandom({ network });
     const { address } = bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey, network });
     const privateKey = keyPair.toWIF();
+    // NOTE: Comment previous line and uncomment the next line to use private keys instead WIF
+    // const privateKey = keyPair.privateKey.toString('hex');
 
     return {
       address,
@@ -106,61 +111,137 @@ class BitcoinNetwork extends AbstractNetwork {
   }
 
 
-  getUtxo() {
+  getUtxo(address) {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');
     }
-    return this.rpc.getUtxo(this.defaultAccount);
+    return this.rpc.getUtxo(address || this.defaultAccount);
   }
 
 
-  async createTransaction(from, to, amount, fee) {
+  async createTransaction(from, to, amount) {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');
     }
 
-    const network = getBitcoinNetwork(this.networkType);
-    const utxos = await this.rpc.getUtxo(from);
+    // Fetch UTXOs and transaction fees
+    const [utxos, bytePrice] = await Promise.all([
+      this.rpc.getUtxo(from),
+      this.getBytePrice().catch(() => 2), // Defaults to 2 Satoshi
+    ]);
 
-    // TODO: select utxo correctly
-    let [selectedUtxo] = utxos;
-    for (const utxo of utxos) {
-      if (utxo.value < selectedUtxo.value) {
-        selectedUtxo = utxo;
-      }
+    // Sort UTXOs by value
+    utxos.sort((a, b) => new BigNumber(a.value).minus(b.value).toNumber());
+    utxos.map((u, i) => console.log('UTXO #', i, ':', u.value));
+
+    // Compute fees: Bitcoin tx Size = in*180 + out*34 + 10 +-in (225 bytes = 180+34+10-1)
+    let fee = String(new BigNumber(Math.floor(225 * bytePrice))); // 225 bytes for 1-1 tx
+    const inputFee = String(new BigNumber(Math.floor(179 * bytePrice))); // 179 bytes per input
+
+    // Normalize tx value, check the balance and value before processing UTXOs
+    const quantity = normalize(amount, 8);
+    const dust = 500;
+    const balance = utxos.reduce((a, b) => new BigNumber(a).plus(b.value), 0);
+    if (new BigNumber(quantity).plus(fee).isGreaterThan(balance)) {
+      throw new Error('Insufficient Funds');
+    }
+    if (new BigNumber(quantity).isLessThan(dust)) {
+      throw new Error('Amount to low');
     }
 
-    const rawTransaction = await this.rpc.getRawTx(selectedUtxo.tx_hash);
+    // Loop through sorted UTXOs in order to select the minimal number of inputs to perform the tx
+    const selectedUtxos = [];
+    let summ = new BigNumber(0);
+    let suitableUtxo = null;
+    const loopThroughUtxos = async () => {
+      // Compute required amount in Satoshi
+      const requiredAmount = new BigNumber(quantity).plus(fee);
+
+      // Check if there is an UTXO where summ + utxo.value >= requiredAmount
+      // eslint-disable-next-line no-restricted-syntax
+      for (const utxo of utxos) {
+        const value = new BigNumber(utxo.value);
+        if (value.plus(summ).isGreaterThanOrEqualTo(requiredAmount)
+        && (!suitableUtxo || value.isLessThan(suitableUtxo.value))) {
+          suitableUtxo = utxo;
+          break;
+        }
+      }
+
+      if (!suitableUtxo) {
+        if (utxos.length < 1) {
+          throw new Error('Insufficient Funds');
+        }
+        // Move greatest utxo to result.utxos array
+        const greatestUtxo = utxos.pop();
+        selectedUtxos.push(greatestUtxo);
+        // Increase summ and fee because we use one more UTXO
+        summ = summ.plus(greatestUtxo.value);
+        fee = String(new BigNumber(fee).plus(inputFee));
+        return loopThroughUtxos();
+      }
+
+      // Exit from loop if suitableUtxo is found
+      summ = summ.plus(suitableUtxo.value);
+      selectedUtxos.push(suitableUtxo);
+      return { selectedUtxos, fee, summ };
+    };
+    await loopThroughUtxos();
+
+    // Create a PSBT instance (Partially Signed Bitcoin Transaction)
+    const network = getBitcoinNetwork(this.networkType);
     const psbt = new bitcoin.Psbt({ network });
 
-    const input = {
-      hash: selectedUtxo.tx_hash, // tx id
-      index: selectedUtxo.tx_output_n, // vout
-    };
+    // Retrive parent raw transactions
+    const hashes = [...new Set(selectedUtxos.map((utxo) => utxo.tx_hash))];
+    const rawTxs = {};
+    await Promise.all(hashes.map((hash) => this.rpc.getRawTx(hash).then((rawTx) => {
+      rawTxs[hash] = rawTx;
+    })));
 
-    if (isSegwit(rawTransaction)) {
-      input.witnessUtxo = {
-        script: Buffer.from(selectedUtxo.script, 'hex'),
-        value: selectedUtxo.value,
-      };
+    // Add inputs
+    const inputs = selectedUtxos.map((utxo) => {
+      const previousTx = rawTxs[utxo.tx_hash];
+      // if (isSegwit(previousTx)) {
+      //   return {
+      //     hash: utxo.tx_hash, // tx id
+      //     index: utxo.tx_output_n, // vout
+      //     witnessUtxo: {
+      //       script: Buffer.from(utxo.script, 'hex'),
+      //       value: utxo.value,
+      //     },
+      //   };
+      // }
       // Not featured: input.witnessScript (A Buffer of the witnessScript for P2WSH)
-    } else {
-      input.nonWitnessUtxo = Buffer.from(rawTransaction, 'hex');
-    }
-    // Not featured: input.redeemScript (A Buffer of the redeemScript for P2SH)
-    psbt.addInput(input);
-    const output = {
-      address: this.defaultAccount,
-      value: Number(amount),
-    };
-    psbt.addOutput(output);
-    if (Number(amount) + Number(fee) < selectedUtxo.value) {
-      const change = {
-        address: this.defaultAccount,
-        value: selectedUtxo.value - amount - fee,
+      return {
+        hash: utxo.tx_hash, // tx id
+        index: utxo.tx_output_n, // vout
+        nonWitnessUtxo: Buffer.from(previousTx, 'hex'),
+        // Not featured: redeemScript (A Buffer of the redeemScript for P2SH)
       };
-      psbt.addOutput(change);
+    });
+    psbt.addInputs(inputs);
+
+    // Add outputs
+    const difference = new BigNumber(summ).minus(quantity).minus(fee);
+    const outputs = [{
+      address: to,
+      value: Number(quantity),
+    }];
+    console.log('FEE', fee);
+    console.log('SUMM', summ.toNumber());
+    console.log('DIFF', difference.toNumber());
+    if (difference.isGreaterThanOrEqualTo(dust)) {
+      outputs.push({
+        address: from,
+        value: difference.toNumber(),
+      });
     }
+    psbt.addOutputs(outputs);
+
+    console.log('ADDED INPUTS', inputs);
+    console.log('ADDED OUTOUTS', outputs);
+
     return psbt;
   }
 
@@ -178,8 +259,8 @@ class BitcoinNetwork extends AbstractNetwork {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');
     }
-    const { hash } = await this.rpc.pushRawTx(rawTransaction);
-    return hash;
+    const { tx } = await this.rpc.pushRawTx(rawTransaction);
+    return tx.hash;
   }
 
 
