@@ -15,8 +15,8 @@ echo "BLOCKCYPHER_TOKEN=$YOUR_ACCESS_TOKEN" > .env
 echo "NETWORK_TYPE=mainnet" >> .env
 echo "SENDER_WIF=$COMPRESSED_WIF_PRIVATE_KEY" >> .env
 echo "AMOUNT=$AMOUNT_TO_SEND" >> .env
-echo "MAX_FEE=$MAXIMUM_FEE_PAID_TO_MINERS" >> .env
+echo "RECIPIENT_ADDRESS=$RECIPIENT_ADDRESS" >> .env
 
-# Run the project (will automatically make a $AMOUNT_TO_SEND self-transaction and broadcast)
+# Run the project (will create and broadcast an $AMOUNT_TO_SEND transaction to $RECIPIENT_ADDRESS)
 npm run start
 ```
