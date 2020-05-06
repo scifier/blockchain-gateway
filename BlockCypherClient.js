@@ -1,4 +1,5 @@
 const axios = require('axios');
+const Bottleneck = require('bottleneck');
 
 const BlockCypherError = require('./errors/BlockCypherError');
 
@@ -31,6 +32,9 @@ class BlockCypherClient {
       ? 'https://api.blockcypher.com/v1/btc/test3'
       : 'https://api.blockcypher.com/v1/btc/main';
 
+    // Rate limiter for Blockcypher (max 3 requests per second)
+    this.limiter = new Bottleneck({ maxConcurrent: 1, minTime: 333 });
+
     return this;
   }
 
@@ -49,7 +53,10 @@ class BlockCypherClient {
     delete params.networkType;
 
     try {
-      const { data } = await axios.get(endpoint, { params });
+      const { data } = await this.limiter.schedule(() => axios.get(
+        endpoint,
+        { params },
+      ));
       return data;
     } catch (err) {
       throw new BlockCypherError(err);
@@ -69,7 +76,11 @@ class BlockCypherClient {
     const requestObject = options;
 
     try {
-      const { data } = await axios.post(endpoint, requestObject, { token: this.accessToken });
+      const { data } = await this.limiter.schedule(() => axios.post(
+        endpoint,
+        requestObject,
+        { token: this.accessToken },
+      ));
       return data;
     } catch (err) {
       throw new BlockCypherError(err);
