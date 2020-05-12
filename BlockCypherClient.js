@@ -122,7 +122,7 @@ class BlockCypherClient {
   async getUtxo(address) {
     const options = { unspentOnly: true, includeScript: true };
     const { txrefs } = await this.getAddressInfo(address, options);
-    return txrefs;
+    return Array.isArray(txrefs) ? txrefs : [];
   }
 
 
