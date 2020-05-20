@@ -49,7 +49,7 @@ class AbstractNetwork {
      * @memberof AbstractNetwork
      * @abstract
      */
-    this.networkName = null;
+    this.protocol = null;
 
     /**
      * @memberof AbstractNetwork
@@ -119,14 +119,14 @@ class AbstractNetwork {
    *
    * @param {string} name Network name
    */
-  set networkName(name) {
-    if (!this._networkName) {
-      this._networkName = name;
+  set protocol(name) {
+    if (!this._protocol) {
+      this._protocol = name;
     }
   }
 
-  get networkName() {
-    return this._networkName;
+  get protocol() {
+    return this._protocol;
   }
 
   generateAccount() {

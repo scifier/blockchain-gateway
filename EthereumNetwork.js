@@ -38,7 +38,7 @@ class EthereumNetwork extends AbstractNetwork {
    */
   constructor(options = {}) {
     super();
-    this.networkName = 'Ethereum';
+    this.protocol = 'ethereum';
 
     // Use default options if they were not passed as constructor arguments
     const networkType = (typeof options.networkType === 'string')

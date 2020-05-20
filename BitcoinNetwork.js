@@ -45,7 +45,7 @@ class BitcoinNetwork extends AbstractNetwork {
    */
   constructor(options = {}) {
     super();
-    this.networkName = 'Bitcoin';
+    this.protocol = 'bitcoin';
 
     // Use default options if they were not passed as constructor arguments
     const networkType = (typeof options.networkType === 'string')
