@@ -4,7 +4,8 @@
   "description": "Bitcoin and Ethereum transaction management",
   "main": "index.js",
   "scripts": {
-    "start": "node --experimental-repl-await index.js || echo 'WARNING! await keyword is not supported (Node.js version < 10)' && node index.js",
+    "start": "node --experimental-repl-await index.js || npm run start:sync",
+    "start:sync": "echo 'WARNING! await keyword is not supported (Node.js version < 10)' && node index.js",
     "test": "node test"
   },
   "repository": {
