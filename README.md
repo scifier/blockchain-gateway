@@ -15,11 +15,13 @@ npm install
 npm run start
 
 # Example of CLI usage
-> new EthereumNetwork().generateKeypair()
-{
-  address: '0xa71F7F4611BA0c6E836671210a97DCD2DCcF1738',
-  privateKey: '0x1c98fa0487eba75ea5819850759fbba0c3ff79a811b9bdcb541a36b0fc2dd286'
-}
+> const ethereum = new EthereumNetwork()
+> ethereum.generateKeypair()
+{ address: '0xa71F7F4611BA0c6E836671210a97DCD2DCcF1738',
+  privateKey:
+   '0x1c98fa0487eba75ea5819850759fbba0c3ff79a811b9bdcb541a36b0fc2dd286' }
+> await ethereum.connect('0x1c98fa0487eba75ea5819850759fbba0c3ff79a811b9bdcb541a36b0fc2dd286')
+[ '0xa71F7F4611BA0c6E836671210a97DCD2DCcF1738' ]
 ```
 
 ## Testing and Development

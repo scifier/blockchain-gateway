@@ -4,7 +4,7 @@
   "description": "Bitcoin and Ethereum transaction management",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node --experimental-repl-await index.js",
     "test": "node test"
   },
   "repository": {
