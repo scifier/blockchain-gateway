@@ -5,7 +5,7 @@
  * @property {Function} connect Function for connecting to RPC using provided account
  * @property {Function} onAccountChange Function triggered after changing defaultAcount
  * @property {string} defaultAccount Provider selected account address (default: null)
- * @property {string} networkName default: 'unknown'
+ * @property {string} protocol default: null
  * @property {string} networkType 'mainnet' | 'testnet' (default: 'unknown')
  * @property {string} explorer default: 'https://etherscan.io/'
  *
@@ -56,12 +56,6 @@ class AbstractNetwork {
      * @instance
      */
     this.networkType = 'unknown';
-
-    /**
-     * @memberof AbstractNetwork
-     * @instance
-     */
-    this.explorer = 'https://etherscan.io/';
 
     return new Proxy(this, traps);
   }
@@ -129,7 +123,28 @@ class AbstractNetwork {
     return this._protocol;
   }
 
-  generateAccount() {
+  /**
+   * @memberof AbstractNetwork
+   * @instance
+   *
+   * @param {string} link Link to blockchain explorer
+   */
+  set explorer(link) {
+    this._explorer = link;
+  }
+
+  get explorer() {
+    if (typeof this._explorer === 'string') {
+      return this._explorer.replace(/\/$/, '');
+    }
+    return this.defaultExplorer.replace(/\/$/, '');
+  }
+
+  get defaultExplorer() {
+    return `https://blockchair.com/${this.protocol}`;
+  }
+
+  generateKeypair() {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');
     }
@@ -142,6 +157,12 @@ class AbstractNetwork {
   }
 
   recover() {
+    if (!this.rpc) {
+      throw new Error('This function require an initialized rpc');
+    }
+  }
+
+  createTransaction() {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');
     }
