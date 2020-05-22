@@ -44,12 +44,7 @@ class EthereumNetwork extends AbstractNetwork {
     const networkType = (typeof options.networkType === 'string')
       ? options.networkType
       : 'testnet';
-    const defaultExplorer = (networkType === 'testnet')
-      ? 'https://ropsten.etherscan.io/'
-      : 'https://etherscan.io/';
-    this.explorer = (typeof options.explorer === 'string')
-      ? options.explorer.replace(/\/$/, '')
-      : defaultExplorer;
+    this.explorer = options.explorer;
 
     // Modern Ethereum browser detected
     if (typeof window !== 'undefined' && window.ethereum) {
@@ -156,7 +151,7 @@ class EthereumNetwork extends AbstractNetwork {
   }
 
 
-  generateAccount() {
+  generateKeypair() {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');
     }
@@ -232,6 +227,14 @@ class EthereumNetwork extends AbstractNetwork {
         } return true;
       });
     return backoff();
+  }
+
+
+  get defaultExplorer() {
+    if (this.networkType === 'testnet') {
+      return 'https://ropsten.etherscan.io/';
+    }
+    return 'https://etherscan.io/';
   }
 }
 

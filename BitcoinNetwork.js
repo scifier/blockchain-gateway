@@ -48,20 +48,13 @@ class BitcoinNetwork extends AbstractNetwork {
     this.protocol = 'bitcoin';
 
     // Use default options if they were not passed as constructor arguments
-    const networkType = (typeof options.networkType === 'string')
+    this.networkType = (typeof options.networkType === 'string')
       ? options.networkType
       : 'testnet';
-    const defaultExplorer = (networkType === 'testnet')
-      ? 'https://live.blockcypher.com/btc-testnet'
-      : 'https://live.blockcypher.com/btc';
+    this.explorer = options.explorer;
 
     // Setup provider and update networkType
     this.rpc = new BlockCypherClient(options);
-    this.networkType = networkType;
-
-    this.explorer = (typeof options.explorer === 'string')
-      ? options.explorer.replace(/\/$/, '')
-      : defaultExplorer;
   }
 
 
@@ -88,7 +81,7 @@ class BitcoinNetwork extends AbstractNetwork {
   }
 
 
-  generateAccount() {
+  generateKeypair() {
     const network = getBitcoinNetwork(this.networkType);
     const keyPair = bitcoin.ECPair.makeRandom({ network });
     const { address } = bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey, network });
@@ -283,6 +276,14 @@ class BitcoinNetwork extends AbstractNetwork {
         } throw err;
       });
     return backoff();
+  }
+
+
+  get defaultExplorer() {
+    if (this.networkType === 'testnet') {
+      return 'https://live.blockcypher.com/btc-testnet/';
+    }
+    return 'https://live.blockcypher.com/btc/';
   }
 }
 
