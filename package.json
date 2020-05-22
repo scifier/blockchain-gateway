@@ -3,10 +3,17 @@
   "version": "0.1.0",
   "description": "Bitcoin and Ethereum transaction management",
   "main": "index.js",
+  "bin": "bin/cli.js",
+  "files": [
+    "bin/cli.js",
+    "errors/**",
+    "utils/**",
+    "*.js"
+  ],
   "scripts": {
-    "start": "node --experimental-repl-await index.js || npm run start:sync",
-    "start:sync": "echo 'WARNING! await keyword is not supported (Node.js version < 10)' && node index.js",
-    "test": "node test"
+    "start": "node bin/cli.js",
+    "test": "node test",
+    "lint": "npx eslint ."
   },
   "repository": {
     "type": "git",
@@ -22,15 +29,17 @@
   "dependencies": {
     "axios": "^0.19.2",
     "bignumber.js": "^9.0.0",
-    "bitcoinjs-lib": "^5.1.7",
+    "bitcoinjs-lib": "^5.1.8",
     "bottleneck": "^2.19.5",
-    "web3": "^1.2.7"
+    "web3": "^1.2.8"
   },
   "devDependencies": {
-    "aws-sdk": "^2.680.0",
+    "aws-sdk": "^2.682.0",
     "dotenv": "^8.2.0",
     "eslint": "^6.8.0",
     "eslint-config-airbnb-base": "^14.1.0",
-    "eslint-plugin-import": "^2.20.2"
+    "eslint-plugin-import": "^2.20.2",
+    "husky": "^4.2.5",
+    "lint-staged": "^10.2.6"
   }
 }

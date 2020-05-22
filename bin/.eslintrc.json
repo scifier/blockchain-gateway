@@ -1,0 +1,15 @@
+{
+  "env": {
+    "commonjs": true,
+    "es6": true,
+    "node": true
+  },
+  "extends": [
+    "airbnb-base"
+  ],
+  "rules": {
+    "semi": "off",
+    "quotes": "off",
+    "lines-around-directive": "off"
+  }
+}

@@ -9,9 +9,9 @@ const BlockCypherClient = require('./BlockCypherClient');
 /**
  * check if it's a Segwit or Non-Segwit transaction
  */
-function isSegwit(rawTransaction) {
+/* function isSegwit(rawTransaction) {
   return rawTransaction.substring(8, 12) === '0001';
-}
+} */
 
 
 /**
@@ -125,7 +125,6 @@ class BitcoinNetwork extends AbstractNetwork {
 
     // Sort UTXOs by value
     utxos.sort((a, b) => new BigNumber(a.value).minus(b.value).toNumber());
-    utxos.map((u, i) => console.log('UTXO #', i, ':', u.value));
 
     // Compute fees: Bitcoin tx Size = in*180 + out*34 + 10 +-in (225 bytes = 180+34+10-1)
     let fee = String(new BigNumber(Math.floor(225 * bytePrice))); // 225 bytes for 1-1 tx
@@ -221,9 +220,6 @@ class BitcoinNetwork extends AbstractNetwork {
       address: to,
       value: Number(quantity),
     }];
-    console.log('FEE', fee);
-    console.log('SUMM', summ.toNumber());
-    console.log('DIFF', difference.toNumber());
     if (difference.isGreaterThanOrEqualTo(dust)) {
       outputs.push({
         address: from,
@@ -231,9 +227,6 @@ class BitcoinNetwork extends AbstractNetwork {
       });
     }
     psbt.addOutputs(outputs);
-
-    console.log('ADDED INPUTS', inputs);
-    console.log('ADDED OUTOUTS', outputs);
 
     return psbt;
   }

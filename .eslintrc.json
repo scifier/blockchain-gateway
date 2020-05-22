@@ -16,10 +16,8 @@
     "ecmaVersion": 2018
   },
   "rules": {
-    "no-plusplus": "off",
-    "no-unused-vars": "warn",
-    "no-underscore-dangle": "off",
     "no-restricted-syntax": "warn",
-    "no-console": "off"
+    "no-plusplus": "off",
+    "no-underscore-dangle": "off"
   }
 }
