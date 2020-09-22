@@ -13,10 +13,12 @@
 npm install blockchain-gateway
 ```
 
+Sending Bitcoin transactions is pretty easy. You don't need to deal with UTXOs and computing fees:
+
 ```javascript
 const { BitcoinNetwork } = require('blockchain-gateway');
 
-const { BLOCKCYPHER_TOKEN, PRIVATE_KEY, TRANSFER_ADDRESS } = process.env;
+const { BLOCKCYPHER_TOKEN, PRIVATE_KEY } = process.env;
 
 // Connect to Bitcoin testnet3 with your BlockCypher Access Token
 const bitcoin = new BitcoinNetwork({
@@ -25,15 +27,18 @@ const bitcoin = new BitcoinNetwork({
 });
 
 (async () => {
-  // Connect to your bitcoin account with your compressed WIF private key
+  // Connect to your Bitcoin account with your compressed WIF private key
   await bitcoin.connect(PRIVATE_KEY);
 
-  // Try to send 0.5 tBTC from your account to TRANSFER_ADDRESS
+  // Generate a random Bitcoin account
+  const { address } = ethereum.generateKeypair();
+
+  // Try to send 0.5 tBTC from your account to the generated account
   try {
-    // Create a transaction and select suitable transaction outputs
+    // Compute fees and select suitable transaction outputs
     const tx = await bitcoin.createTransaction(
       bitcoin.defaultAccount,
-      TRANSFER_TO,
+      address,
       0.5,
     );
 
@@ -42,13 +47,63 @@ const bitcoin = new BitcoinNetwork({
 
     // Broadcast the raw transaction
     const txHash = await bitcoin.broadcastTransaction(rawTx);
-
     console.log('Your transaction was successfully broadcasted. txHash:', txHash);
+
+    // Check if the transaction has at least 1 confirmation
+    await bitcoin.getTxStatus(txHash);
+    console.log('Your transaction was successfully mined!');
   } catch (e) {
-    console.log('Unable to broadcast the transaction. ', e.message);
+    console.log('Something went wrong!', e.message);
   }
 })();
 ```
+
+Ethereum transactions are sent in the same way:
+
+```javascript
+const { EthereumNetwork } = require('blockchain-gateway');
+
+const { INFURA_PROJECT_ID, PRIVATE_KEY } = process.env;
+
+// Connect to Ethereum mainnet with your Infura Project Id
+const ethereum = new EthereumNetwork({
+  networkType: 'mainnet',
+  accessToken: INFURA_PROJECT_ID,
+});
+
+(async () => {
+  // Connect to your Ethereum account with your private key
+  await ethereum.connect(PRIVATE_KEY);
+
+  // Generate a random Ethereum account
+  const { address } = ethereum.generateKeypair();
+
+  // Try to send 0.5 ETH from your account to the generated account
+  try {
+    // Compute fees and fetch the nonce
+    const tx = await ethereum.createTransaction(
+      ethereum.defaultAccount,
+      address,
+      0.5,
+    );
+
+    // Sign the transaction
+    const rawTx = await ethereum.signTransaction(tx);
+
+    // Broadcast the raw transaction
+    const txHash = await ethereum.broadcastTransaction(rawTx);
+    console.log('Your transaction was successfully broadcasted. txHash:', txHash);
+
+    // Check if the transaction was mined
+    await ethereum.getTxStatus(txHash);
+    console.log('Your transaction was successfully mined!');
+  } catch (e) {
+    console.log('Something went wrong!', e.message);
+  }
+})();
+```
+
+Also, signing Ethereum transactions using MetaMask is also supported. You don't have to pass the `accessToken` to the `EthereumNetwork` constructor if you are using a browser with installed MetaMask.
 
 ### CLI
 
@@ -102,3 +157,11 @@ node test/wallet-pkey-management
 # Also you can run blockchain-gateway in CLI mode
 npm run start
 ```
+
+## Authors
+
+- **Niţa Radu** - *Initial work* - [scifier](https://github.com/scifier)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
