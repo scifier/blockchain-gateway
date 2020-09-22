@@ -49,11 +49,19 @@ class EthereumNetwork extends AbstractNetwork {
     // Modern Ethereum browser detected
     if (typeof window !== 'undefined' && window.ethereum) {
       window.ethereum.autoRefreshOnNetworkChange = false;
-      this.connect = () => window.ethereum.enable()
-        .then(([account]) => {
-          this.defaultAccount = account;
-          return [this.defaultAccount];
-        });
+      if (window.ethereum.enable) {
+        this.connect = () => window.ethereum.enable()
+          .then(([account]) => {
+            this.defaultAccount = account;
+            return [this.defaultAccount];
+          });
+      } else {
+        this.connect = () => window.ethereum.request({ method: 'eth_requestAccounts' })
+          .then(([account]) => {
+            this.defaultAccount = account;
+            return [this.defaultAccount];
+          });
+      }
 
       // Setup provider, update defaultAccount and networkType
       this.rpc = new Web3(window.ethereum);
@@ -61,10 +69,19 @@ class EthereumNetwork extends AbstractNetwork {
       this.networkType = getNetworkTypeFromId(window.ethereum.networkVersion);
 
       // Handle provider updates
-      this.rpc.currentProvider.publicConfigStore.on('update', ({ networkVersion, selectedAddress }) => {
-        this.defaultAccount = selectedAddress;
-        this.networkType = getNetworkTypeFromId(networkVersion);
-      });
+      if (this.rpc.currentProvider && this.rpc.currentProvider.publicConfigStore) {
+        this.rpc.currentProvider.publicConfigStore.on('update', ({ networkVersion, selectedAddress }) => {
+          this.defaultAccount = selectedAddress || window.ethereum.selectedAddress;
+          this.networkType = getNetworkTypeFromId(networkVersion);
+        });
+      } else {
+        window.ethereum.on('accountsChanged', ([account]) => {
+          this.defaultAccount = account;
+        });
+        window.ethereum.on('chainChanged', (chainId) => {
+          this.networkType = getNetworkTypeFromId(chainId);
+        });
+      }
 
       this.sign = (message) => this.rpc.eth.personal.sign(message, this.defaultAccount)
         .catch((err) => new TransactionError(err));
