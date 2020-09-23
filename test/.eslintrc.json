@@ -16,6 +16,7 @@
     "ecmaVersion": 2018
   },
   "rules": {
+    "no-multiple-empty-lines": ["error", { "max": 2, "maxEOF": 1 }],
     "import/no-unresolved": "off",
     "no-console": "off"
   }

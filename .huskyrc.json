@@ -1,5 +1,6 @@
 {
   "hooks": {
-    "pre-commit": "npx lint-staged"
+    "pre-commit": "npx lint-staged",
+    "commit-msg": "node node_modules/commit-msg/bin/validate \"$(cat $HUSKY_GIT_PARAMS)\""
   }
 }
