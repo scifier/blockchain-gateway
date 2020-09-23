@@ -150,6 +150,12 @@ class AbstractNetwork {
     }
   }
 
+  getBalance() {
+    if (!this.rpc) {
+      throw new Error('This function require an initialized rpc');
+    }
+  }
+
   sign() {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');

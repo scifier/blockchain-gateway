@@ -1,28 +1,28 @@
 require('dotenv').config();
-const { BitcoinNetwork } = require('../..');
+const { EthereumNetwork } = require('../..');
 
 const networkType = process.env.NETWORK_TYPE || 'testnet';
-const accessToken = process.env.BLOCKCYPHER_TOKEN;
+const accessToken = process.env.INFURA_TOKEN;
 
-const { BTC_PRIVATE_KEY, BTC_ADDRESS, BTC_AMOUNT } = process.env;
+const { ETH_PRIVATE_KEY, ETH_ADDRESS, ETH_AMOUNT } = process.env;
 
-const bitcoin = new BitcoinNetwork({ networkType, accessToken });
+const ethereum = new EthereumNetwork({ networkType, accessToken });
 
 module.exports = (async () => {
-  await bitcoin.connect(BTC_PRIVATE_KEY);
-  console.log('Current account:', bitcoin.defaultAccount);
+  await ethereum.connect(ETH_PRIVATE_KEY);
+  console.log('Current account:', ethereum.defaultAccount);
   console.log('=====');
 
-  const balance = await bitcoin.getBalance(bitcoin.defaultAccount);
+  const balance = await ethereum.getBalance(ethereum.defaultAccount);
   console.log('Current balance:', balance);
   console.log('=====');
 
   let tx;
   try {
-    tx = await bitcoin.createTransaction(
-      bitcoin.defaultAccount,
-      BTC_ADDRESS || bitcoin.defaultAccount,
-      BTC_AMOUNT || 0,
+    tx = await ethereum.createTransaction(
+      ethereum.defaultAccount,
+      ETH_ADDRESS || ethereum.defaultAccount,
+      ETH_AMOUNT || 0,
     );
     console.log('Transaction was created. tx:', tx);
   } catch (e) {
@@ -34,7 +34,7 @@ module.exports = (async () => {
   let rawTransaction;
   let transactionHash;
   try {
-    const { rawTx, txHash } = await bitcoin.signTransaction(tx);
+    const { rawTx, txHash } = await ethereum.signTransaction(tx);
     rawTransaction = rawTx;
     transactionHash = txHash;
     console.log('Transaction was signed. Raw tx hex:', rawTx, 'txhash:', txHash);
@@ -45,8 +45,8 @@ module.exports = (async () => {
 
 
   try {
-    await bitcoin.broadcastTransaction(rawTransaction);
-    console.log('Transaction was broadcasted:', bitcoin.getTxLink(transactionHash));
+    await ethereum.broadcastTransaction(rawTransaction);
+    console.log('Transaction was broadcasted:', ethereum.getTxLink(transactionHash));
   } catch (e) {
     console.log('Unable to broadcast the transaction.', e.message);
   }

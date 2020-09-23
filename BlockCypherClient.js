@@ -104,12 +104,26 @@ class BlockCypherClient {
    * https://www.blockcypher.com/dev/bitcoin/#address-endpoint
    *
    * @param {string} address bitcoin address
-   * @param {object} [params] querry params
+   * @param {object} [params] query params
    *
    * @returns {object} BlockCypher address endpoint response
    */
   getAddressInfo(address, params = {}) {
     return this._get(`addrs/${address}`, params);
+  }
+
+
+  /**
+   * Get balance for a given address
+   * https://www.blockcypher.com/dev/bitcoin/#address-balance-endpoint
+   *
+   * @param {string} address bitcoin address
+   * @param {object} [params] query params
+   *
+   * @returns {object} BlockCypher address balance endpoint response
+   */
+  getAddressBalance(address, params = {}) {
+    return this._get(`addrs/${address}/balance`, params);
   }
 
 
@@ -131,7 +145,7 @@ class BlockCypherClient {
    * https://www.blockcypher.com/dev/bitcoin/#transaction-hash-endpoint
    *
    * @param {string} txHash transaction hash
-   * @param {object} [params] querry params
+   * @param {object} [params] query params
    *
    * @returns {object} BlockCypher address endpoint response
    */
@@ -159,7 +173,7 @@ class BlockCypherClient {
    *
    * @param {string} rawTransaction signed raw transaction
    *
-   * @returns {object} BlockCypher push raw transaction endpoint respons
+   * @returns {object} BlockCypher push raw transaction endpoint response
    */
   pushRawTx(rawTransaction) {
     return this._post('txs/push', { tx: rawTransaction });

@@ -2,9 +2,12 @@ const bitcoin = require('bitcoinjs-lib');
 const BigNumber = require('bignumber.js');
 
 const { delay, normalize } = require('./utils');
+const TransactionError = require('./errors/TransactionError');
 const AbstractNetwork = require('./AbstractNetwork');
 const BlockCypherClient = require('./BlockCypherClient');
 
+const STATUS_BACKOFF_ITERATIONS = [1250, 2500, 5000, 10000, 20000];
+const DUST = 500;
 
 /**
  * check if it's a Segwit or Non-Segwit transaction
@@ -74,7 +77,12 @@ class BitcoinNetwork extends AbstractNetwork {
       // NOTE: sign inputs with signInputAsync() for debugging
       // await Promise.all(tx.data.inputs.map((_, i) => tx.signInputAsync(i, keyPair)));
       tx.finalizeAllInputs();
-      return tx.extractTransaction().toHex();
+      const rawTx = tx.extractTransaction().toHex();
+      const { hash } = await this.rpc.decodeRawTx(rawTx);
+      return {
+        rawTx,
+        txHash: hash,
+      };
     };
     this.defaultAccount = address;
     return Promise.resolve([this.defaultAccount]);
@@ -93,6 +101,17 @@ class BitcoinNetwork extends AbstractNetwork {
       address,
       privateKey,
     };
+  }
+
+
+  /**
+   * @param {string} address Bitcoin address
+   *
+   * @returns {Promise<string>} balance of a given address
+   */
+  async getBalance(address) {
+    const data = await this.rpc.getAddressBalance(address);
+    return normalize(data.final_balance, -8, 8);
   }
 
 
@@ -132,28 +151,28 @@ class BitcoinNetwork extends AbstractNetwork {
 
     // Normalize tx value, check the balance and value before processing UTXOs
     const quantity = normalize(amount, 8);
-    const dust = 500;
+
     const balance = utxos.reduce((a, b) => new BigNumber(a).plus(b.value), 0);
     if (new BigNumber(quantity).plus(fee).isGreaterThan(balance)) {
-      throw new Error('Insufficient Funds');
+      throw new TransactionError('Insufficient Funds');
     }
-    if (new BigNumber(quantity).isLessThan(dust)) {
-      throw new Error('Amount to low');
+    if (new BigNumber(quantity).isLessThan(DUST)) {
+      throw new TransactionError('Amount to low');
     }
 
     // Loop through sorted UTXOs in order to select the minimal number of inputs to perform the tx
     const selectedUtxos = [];
-    let summ = new BigNumber(0);
+    let sum = new BigNumber(0);
     let suitableUtxo = null;
     const loopThroughUtxos = async () => {
       // Compute required amount in Satoshi
       const requiredAmount = new BigNumber(quantity).plus(fee);
 
-      // Check if there is an UTXO where summ + utxo.value >= requiredAmount
+      // Check if there is an UTXO where sum + utxo.value >= requiredAmount
       // eslint-disable-next-line no-restricted-syntax
       for (const utxo of utxos) {
         const value = new BigNumber(utxo.value);
-        if (value.plus(summ).isGreaterThanOrEqualTo(requiredAmount)
+        if (value.plus(sum).isGreaterThanOrEqualTo(requiredAmount)
         && (!suitableUtxo || value.isLessThan(suitableUtxo.value))) {
           suitableUtxo = utxo;
           break;
@@ -162,21 +181,21 @@ class BitcoinNetwork extends AbstractNetwork {
 
       if (!suitableUtxo) {
         if (utxos.length < 1) {
-          throw new Error('Insufficient Funds');
+          throw new TransactionError('Insufficient Funds');
         }
         // Move greatest utxo to result.utxos array
         const greatestUtxo = utxos.pop();
         selectedUtxos.push(greatestUtxo);
-        // Increase summ and fee because we use one more UTXO
-        summ = summ.plus(greatestUtxo.value);
+        // Increase sum and fee because we use one more UTXO
+        sum = sum.plus(greatestUtxo.value);
         fee = String(new BigNumber(fee).plus(inputFee));
         return loopThroughUtxos();
       }
 
       // Exit from loop if suitableUtxo is found
-      summ = summ.plus(suitableUtxo.value);
+      sum = sum.plus(suitableUtxo.value);
       selectedUtxos.push(suitableUtxo);
-      return { selectedUtxos, fee, summ };
+      return { selectedUtxos, fee, sum };
     };
     await loopThroughUtxos();
 
@@ -184,7 +203,7 @@ class BitcoinNetwork extends AbstractNetwork {
     const network = getBitcoinNetwork(this.networkType);
     const psbt = new bitcoin.Psbt({ network });
 
-    // Retrive parent raw transactions
+    // Retrieve parent raw transactions
     const hashes = [...new Set(selectedUtxos.map((utxo) => utxo.tx_hash))];
     const rawTxs = {};
     await Promise.all(hashes.map((hash) => this.rpc.getRawTx(hash).then((rawTx) => {
@@ -215,12 +234,12 @@ class BitcoinNetwork extends AbstractNetwork {
     psbt.addInputs(inputs);
 
     // Add outputs
-    const difference = new BigNumber(summ).minus(quantity).minus(fee);
+    const difference = new BigNumber(sum).minus(quantity).minus(fee);
     const outputs = [{
       address: to,
       value: Number(quantity),
     }];
-    if (difference.isGreaterThanOrEqualTo(dust)) {
+    if (difference.isGreaterThanOrEqualTo(DUST)) {
       outputs.push({
         address: from,
         value: difference.toNumber(),
@@ -245,8 +264,11 @@ class BitcoinNetwork extends AbstractNetwork {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');
     }
-    const { tx } = await this.rpc.pushRawTx(rawTransaction);
-    return tx.hash;
+    // const { tx } = await this.rpc.pushRawTx(rawTransaction);
+    // return tx;
+    // Uncomment the previous block and comment the next line to return the transaction receipt
+    await this.rpc.pushRawTx(rawTransaction);
+    return true;
   }
 
 
@@ -254,19 +276,19 @@ class BitcoinNetwork extends AbstractNetwork {
     if (!this.rpc) {
       throw new Error('This function require an initialized rpc');
     }
-    const iterations = [1250, 2500, 5000, 10000, 20000];
     let i = 0;
     const backoff = () => this.rpc.getTx(transactionHash)
       .then((res) => {
         if (!res.confirmations || res.confirmations < 1) {
-          throw new Error('Transaction not mined yet or reverted');
+          throw new TransactionError('Transaction was not mined');
         }
         return true;
       })
       .catch((err) => {
-        if (i < iterations.length) {
-          return delay(iterations[i++]).then(() => backoff());
-        } throw err;
+        if (i < STATUS_BACKOFF_ITERATIONS.length) {
+          return delay(STATUS_BACKOFF_ITERATIONS[i++]).then(() => backoff());
+        }
+        throw new TransactionError(err);
       });
     return backoff();
   }

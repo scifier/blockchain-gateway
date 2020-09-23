@@ -10,7 +10,7 @@ const BigNumber = require('bignumber.js');
  * @param  {string|number} exponent default = 18
  * @param  {number} decimalPlaces default = 18
  * @param  {string} type default = 'string' ('bignumber'|'string'|'number')
- * @return {*} the type of returned value is choosen by 'type' argument
+ * @return {*} the type of returned value is chosen by 'type' argument
  */
 function normalize(amount, exponent = 18, decimalPlaces = 18, type = 'string') {
   BigNumber.config({

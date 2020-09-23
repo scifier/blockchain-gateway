@@ -1,5 +1,7 @@
 # Blockchain Gateway
 
+[![npm version](https://badge.fury.io/js/blockchain-gateway.svg)](https://badge.fury.io/js/blockchain-gateway)
+
 - [Usage](#usage)
   - [Library](#library)
   - [CLI](#cli)
@@ -43,15 +45,15 @@ const bitcoin = new BitcoinNetwork({
     );
 
     // Sign the transaction inputs
-    const rawTx = await bitcoin.signTransaction(tx);
+    const { rawTx, txHash } = await bitcoin.signTransaction(tx);
+    console.log('Your transaction was successfully signed. txHash:', txHash);
 
     // Broadcast the raw transaction
-    const txHash = await bitcoin.broadcastTransaction(rawTx);
-    console.log('Your transaction was successfully broadcasted. txHash:', txHash);
+    await bitcoin.broadcastTransaction(rawTx);
 
     // Check if the transaction has at least 1 confirmation
     await bitcoin.getTxStatus(txHash);
-    console.log('Your transaction was successfully mined!');
+    console.log('Your transaction was successfully mined!', bitcoin.getTxLink(txHash));
   } catch (e) {
     console.log('Something went wrong!', e.message);
   }
@@ -61,7 +63,8 @@ const bitcoin = new BitcoinNetwork({
 Ethereum transactions are sent in the same way:
 
 ```javascript
-const { EthereumNetwork } = require('blockchain-gateway');
+import { EthereumNetwork } from 'blockchain-gateway';
+// or import EthereumNetwork from 'blockchain-gateway/EthereumNetwork';
 
 const { INFURA_PROJECT_ID, PRIVATE_KEY } = process.env;
 
@@ -88,15 +91,15 @@ const ethereum = new EthereumNetwork({
     );
 
     // Sign the transaction
-    const rawTx = await ethereum.signTransaction(tx);
+    const { rawTx, txHash } = await ethereum.signTransaction(tx);
+    console.log('Your transaction was successfully signed. txHash:', txHash);
 
     // Broadcast the raw transaction
-    const txHash = await ethereum.broadcastTransaction(rawTx);
-    console.log('Your transaction was successfully broadcasted. txHash:', txHash);
+    await ethereum.broadcastTransaction(rawTx);
 
     // Check if the transaction was mined
     await ethereum.getTxStatus(txHash);
-    console.log('Your transaction was successfully mined!');
+    console.log('Your transaction was successfully mined!', ethereum.getTxLink(txHash));
   } catch (e) {
     console.log('Something went wrong!', e.message);
   }
@@ -115,13 +118,18 @@ npm install -g blockchain-gateway
 blockchain-gateway
 
 # Example of CLI usage
-> const ethereum = new EthereumNetwork()
+> const ethereum = new EthereumNetwork({ accessToken: 'YOUR_INFURA_PROJECT_ID' })
 > ethereum.generateKeypair()
 { address: '0xa71F7F4611BA0c6E836671210a97DCD2DCcF1738',
-  privateKey:
-   '0x1c98fa0487eba75ea5819850759fbba0c3ff79a811b9bdcb541a36b0fc2dd286' }
+  privateKey: '0x1c98fa0487eba75ea5819850759fbba0c3ff79a811b9bdcb541a36b0fc2dd286' }
+> await ethereum.getBalance('0xa71F7F4611BA0c6E836671210a97DCD2DCcF1738')
+'0'
 > await ethereum.connect('0x1c98fa0487eba75ea5819850759fbba0c3ff79a811b9bdcb541a36b0fc2dd286')
 [ '0xa71F7F4611BA0c6E836671210a97DCD2DCcF1738' ]
+> await ethereum.createTransaction('0xa71F7F4611BA0c6E836671210a97DCD2DCcF1738', '0xa71F7F4611BA0c6E836671210a97DCD2DCcF1738', '0.5')
+Uncaught TransactionError: Insufficient Funds
+  at Proxy.createTransaction (/Users/user/.nvm/versions/node/v12.18.3/lib/node_modules/blockchain-gateway/EthereumNetwork.js:216:13)
+  at processTicksAndRejections (internal/process/task_queues.js:97:5)
 ```
 
 ## Testing and Development
@@ -138,8 +146,12 @@ echo "INFURA_TOKEN=$YOUR_INFURA_PROJECT_ID" >> .env
 echo "NETWORK_TYPE=mainnet" >> .env
 # Variables required by test/bitcoin-transactions
 echo "BTC_PRIVATE_KEY=$COMPRESSED_WIF_PRIVATE_KEY" >> .env
-echo "TRANSFER_TO=$BITCOIN_RECIPIENT_ADDRESS" >> .env
-echo "BTC_AMOUNT=$AMOUNT_TO_SEND" >> .env
+echo "BTC_ADDRESS=$BITCOIN_RECIPIENT_ADDRESS" >> .env
+echo "BTC_AMOUNT=$BTC_AMOUNT_TO_SEND" >> .env
+# Variables required by test/ethereum-transactions
+echo "ETH_PRIVATE_KEY=$ETHEREUM_PRIVATE_KEY" >> .env
+echo "ETH_ADDRESS=$ETHEREUM_RECIPIENT_ADDRESS" >> .env
+echo "ETH_AMOUNT=$ETH_AMOUNT_TO_SEND" >> .env
 # KMS variables are required by test/wallet-pkey-management
 echo "KMS_KEY_ARN=$KMS_KEY_ARN" >> .env
 echo "KMS_ACCESS_KEY=$KMS_ACCESS_KEY" >> .env
@@ -152,6 +164,7 @@ npm run test
 
 # Run specific test
 node test/bitcoin-transactions
+node test/ethereum-transactions
 node test/wallet-pkey-management
 
 # Also you can run blockchain-gateway in CLI mode

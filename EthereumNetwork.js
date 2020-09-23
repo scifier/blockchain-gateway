@@ -1,9 +1,11 @@
 const Web3 = require('web3');
+const BigNumber = require('bignumber.js');
 
-const { delay } = require('./utils');
+const { delay, normalize } = require('./utils');
 const TransactionError = require('./errors/TransactionError');
 const AbstractNetwork = require('./AbstractNetwork');
 
+const STATUS_BACKOFF_ITERATIONS = [1250, 2500, 5000, 10000, 20000];
 
 /**
  * Helper function for convert networkId to networkType
@@ -137,6 +139,7 @@ class EthereumNetwork extends AbstractNetwork {
         ? `https://ropsten.infura.io/v3/${options.accessToken}`
         : `https://mainnet.infura.io/v3/${options.accessToken}`;
       this.rpc = new Web3(new Web3.providers.HttpProvider(endpoint));
+      this.rpc.eth.transactionPollingTimeout = 5;
       this.networkType = networkType;
 
       this.connect = (privateKey) => {
@@ -153,7 +156,10 @@ class EthereumNetwork extends AbstractNetwork {
         const { address, signTransaction, sign } = this.rpc.eth.accounts.wallet.clear().add(pkey);
         this.defaultAccount = address;
         this.signTransaction = (tx) => signTransaction(tx)
-          .then(({ rawTransaction }) => rawTransaction);
+          .then(({ rawTransaction, transactionHash }) => ({
+            rawTx: rawTransaction,
+            txHash: transactionHash,
+          }));
         this.sign = (message) => {
           const { signature } = sign(message);
           return Promise.resolve(signature);
@@ -181,6 +187,17 @@ class EthereumNetwork extends AbstractNetwork {
   }
 
 
+  /**
+   * @param {string} address Ethereum address
+   *
+   * @returns {Promise<string>} balance of a given address
+   */
+  async getBalance(address) {
+    const amount = await this.rpc.eth.getBalance(address);
+    return normalize(amount, -18, 18);
+  }
+
+
   getGasPrice() {
     return this.rpc.eth.getGasPrice();
   }
@@ -192,7 +209,13 @@ class EthereumNetwork extends AbstractNetwork {
 
 
   async createTransaction(from, to, amount) {
-    const value = this.rpc.utils.toBN(amount);
+    const value = normalize(amount);
+
+    const balance = await this.getBalance(from);
+    if (new BigNumber(amount).isGreaterThan(balance)) {
+      throw new TransactionError('Insufficient Funds');
+    }
+
     const [gas, gasPrice, nonce] = await Promise.all([
       this.rpc.eth.estimateGas({
         from,
@@ -207,7 +230,7 @@ class EthereumNetwork extends AbstractNetwork {
     return {
       from,
       to,
-      value: amount,
+      value,
       gas,
       gasPrice,
       nonce,
@@ -226,22 +249,41 @@ class EthereumNetwork extends AbstractNetwork {
   }
 
 
-  broadcastTransaction(...args) {
-    return this.rpc.eth.sendSignedTransaction(...args);
+  async broadcastTransaction(...args) {
+    if (!this.rpc) {
+      throw new Error('This function require an initialized rpc');
+    }
+    try {
+      // const receipt = await this.rpc.eth.sendSignedTransaction(...args);
+      // return receipt;
+      // Uncomment the previous block and comment the next line to return the transaction receipt
+      await this.rpc.eth.sendSignedTransaction(...args);
+    } catch (e) {
+      if (!e.message.includes('Transaction was not mined')) {
+        throw new TransactionError(e);
+      }
+    }
+    return true;
   }
 
 
   getTxStatus(transactionHash) {
-    const iterations = [1250, 2500, 5000, 10000, 20000];
+    if (!this.rpc) {
+      throw new Error('This function require an initialized rpc');
+    }
     let i = 0;
     const backoff = () => this.rpc.eth.getTransactionReceipt(transactionHash)
       .then((receipt) => {
         if (!receipt || !receipt.status) {
-          if (i < iterations.length) {
-            // eslint-disable-next-line no-plusplus
-            return delay(iterations[i++]).then(() => backoff());
-          } throw new Error('Transaction not mined yet or reverted');
-        } return true;
+          throw new TransactionError('Transaction was not mined');
+        }
+        return true;
+      })
+      .catch((err) => {
+        if (i < STATUS_BACKOFF_ITERATIONS.length) {
+          return delay(STATUS_BACKOFF_ITERATIONS[i++]).then(() => backoff());
+        }
+        throw new TransactionError(err);
       });
     return backoff();
   }
