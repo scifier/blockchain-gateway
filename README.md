@@ -6,6 +6,9 @@
   - [Library](#library)
   - [CLI](#cli)
 - [Testing and Development](#testing-and-development)
+- [Versioning](#versioning)
+- [Authors](#authors)
+- [License](#license)
 
 ## Usage
 
@@ -170,6 +173,10 @@ node test/wallet-pkey-management
 # Also you can run blockchain-gateway in CLI mode
 npm run start
 ```
+
+## Versioning
+
+This project use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/scifier/blockchain-gateway/tags).
 
 ## Authors
 
