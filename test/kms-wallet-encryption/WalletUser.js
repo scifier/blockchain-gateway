@@ -31,106 +31,40 @@ class WalletUser {
   /**
    * Get wallets' balances
    *
-   * @param {object} [options]
-   * @param {object} [options.decimalPlaces]
-   * @param {string} [options.currency] 'BTC', 'ETH' or 'GABY'
-   * @param {boolean} [options.extended] include info about tokens and unconfirmed txs
+   * @param {string} currency 'BTC' or 'ETH'
+   *
+   * @returns {string|object} selected currency balance or an object with both balances
    */
-  async getBalance(options = {}) {
-    const decimals = (typeof options.decimalPlaces === 'number') ? options.decimalPlaces : 4;
-
-    if (typeof options.currency === 'string') {
-      if (options.currency.toUpperCase() === 'BTC') {
-        if (options.extended) {
-          return this.wallets.btcWallet.getBalance({ includeAddressInfo: true })
-            .then((btcWalletInfo) => ({
-              ethBalance: normalize(btcWalletInfo.balance, -8, decimals < 8 ? decimals : 8),
-              btcWalletInfo,
-            }));
-        }
-        return this.wallets.btcWallet.getBalance()
-          .then((amount) => normalize(amount, -8, decimals < 8 ? decimals : 8));
+  async getBalance(currency) {
+    if (typeof currency === 'string') {
+      if (currency.toUpperCase() === 'BTC') {
+        return this.wallets.btcWallet.getBalance();
       }
-      if (options.currency.toUpperCase() === 'ETH') {
-        if (options.extended) {
-          return this.wallets.ethWallet.getBalance({ includeAddressInfo: true })
-            .then((ethWalletInfo) => ({
-              ethBalance: normalize(ethWalletInfo.balance, -18, decimals < 18 ? decimals : 18),
-              ethWalletInfo,
-            }));
-        }
-        return this.wallets.ethWallet.getBalance()
-          .then((amount) => normalize(amount, -18, decimals < 18 ? decimals : 18));
+      if (currency.toUpperCase() === 'ETH') {
+        return this.wallets.ethWallet.getBalance();
       }
-      if (options.currency.toUpperCase() === 'GABY') {
-        return this.wallets.ethWallet.getBalance({ token: 'GABY' })
-          .then((amount) => normalize(amount, -18, decimals < 18 ? decimals : 18));
-      }
+      throw new Error('Currently BTC and ETH currencies are supported only');
     }
-
-    if (!options.extended) {
-      const [ethBalance, gabyBalance, btcBalance] = await Promise.all([
-        this.wallets.ethWallet.getBalance()
-          .then((amount) => normalize(amount, -18, decimals < 18 ? decimals : 18)),
-        this.wallets.ethWallet.getBalance({ token: 'GABY' })
-          .then((amount) => normalize(amount, -18, decimals < 18 ? decimals : 18)),
-        this.wallets.btcWallet.getBalance()
-          .then((amount) => normalize(amount, -8, decimals < 8 ? decimals : 8)),
-      ]);
-
-      return {
-        ethBalance,
-        gabyBalance,
-        btcBalance,
-      };
-    }
-
-    const [ethWalletInfo, btcWalletInfo, gabyBalance] = await Promise.all([
-      this.wallets.ethWallet.getBalance({ includeAddressInfo: true }),
-      this.wallets.btcWallet.getBalance({ includeAddressInfo: true }),
-      this.wallets.ethWallet.getBalance({ token: 'GABY' }),
+    const [ethBalance, btcBalance] = await Promise.all([
+      this.wallets.ethWallet.getBalance(),
+      this.wallets.btcWallet.getBalance(),
     ]);
-
     return {
-      ethBalance: normalize(ethWalletInfo.balance, -18, decimals < 18 ? decimals : 18),
-      ethWalletInfo,
-      gabyBalance: normalize(gabyBalance, -18, decimals < 18 ? decimals : 18),
-      tokens: ethWalletInfo.tokens,
-      btcBalance: normalize(btcWalletInfo.finalBalance, -8, decimals < 8 ? decimals : 8),
-      btcWalletInfo,
+      ethBalance,
+      btcBalance,
     };
   }
 
 
-  getTokenHoldingUrl() {
-    return this.wallets.ethWallet.getTokenHoldingUrl();
-  }
-
-
-  async createTransaction({
-    receiver, // regular and token tx
-    currency, // regular and token tx
-    amount, // regular and token tx
-    tokenDenomination, // token tx
-    contractAddress, // token tx and complex tx
-    contractAbi, // complex tx
-    functionName, // complex tx
-    functionArgs, // complex tx
-  }) {
+  async createTransaction({ receiver, currency, amount }) {
     if (typeof currency === 'string') {
       if (currency.toUpperCase() === 'BTC') {
         return this.wallets.btcWallet.createTransaction({ receiver, amount });
       }
-      return this.wallets.ethWallet.createTransaction({
-        receiver, // regular and token tx
-        currency, // regular and token tx
-        amount, // regular and token tx
-        tokenDenomination, // token tx
-        contractAddress, // token tx and complex tx
-        contractAbi, // complex tx
-        functionName, // complex tx
-        functionArgs, // complex tx
-      });
+      if (currency.toUpperCase() === 'ETH') {
+        return this.wallets.ethWallet.createTransaction({ receiver, amount });
+      }
+      throw new Error('Currently BTC and ETH currencies are supported only');
     }
     throw new Error('Currency is not provided');
   }

@@ -31,22 +31,16 @@ class BlockchainWallet {
      * @function
      *
      * @param {object} transaction
-     * @param {string} transaction.receiver regular and token tx
-     * @param {string} [transaction.currency] regular and token tx
-     * @param {string} transaction.amount regular and token tx
-     * @param {number} [transaction.tokenDenomination] token tx
-     * @param {string} [transaction.contractAddress] token tx and complex tx
-     * @param {Array<*>} [transaction.contractAbi] complex tx
-     * @param {string} [transaction.functionName] complex tx
-     * @param {Array<*>} [transaction.functionArgs] complex tx
+     * @param {string} transaction.receiver
+     * @param {string} [transaction.currency]
+     * @param {string} transaction.amount
      *
      * @returns {{tx: object, protocol: string}}
      */
     this.createTransaction = async (transaction = {}) => {
-      const tx = await blockchain.createTransaction({
-        sender: this.address,
-        ...transaction,
-      });
+      const sender = this.address;
+      const { receiver, amount } = transaction;
+      const tx = await blockchain.createTransaction(sender, receiver, amount);
       return {
         tx,
         protocol: this.protocol,
@@ -59,14 +53,17 @@ class BlockchainWallet {
      * @param {object} transaction result of this.createTransaction
      * @param {object} transaction.tx
      *
-     * @returns {{tx: object, rawTx: string, protocol: string}}
+     * @returns {{tx: object, rawTx: string, txHash: string, txLink: string, protocol: string}}
      */
     this.signTransaction = async (transaction = {}) => {
       const pkey = await keyManager.decrypt(privateKey);
-      const rawTx = await blockchain.signTransaction(transaction.tx, pkey);
+      await blockchain.connect(pkey);
+      const { rawTx, txHash } = await blockchain.signTransaction(transaction.tx, pkey);
       return {
         ...transaction,
         rawTx,
+        txHash,
+        txLink: blockchain.getTxLink(txHash),
         protocol: this.protocol,
       };
     };
@@ -74,18 +71,18 @@ class BlockchainWallet {
     /**
      * @function
      *
-     * @param {object} transaction result of this.createTransaction
+     * @param {object} transaction result of this.signTransaction
      * @param {object} [transaction.tx]
      * @param {object} transaction.rawTx
+     * @param {object} [transaction.txHash]
+     * @param {object} [transaction.txLink]
      *
      * @returns {{tx: object, rawTx: string, txHash: string, txLink: string, protocol: string}}
      */
     this.broadcastTransaction = async (transaction = {}) => {
-      const txHash = await blockchain.broadcastTransaction(transaction.rawTx);
+      await blockchain.broadcastTransaction(transaction.rawTx);
       return {
         ...transaction,
-        txHash,
-        txLink: blockchain.getTxLink(txHash),
         protocol: this.protocol,
       };
     };
@@ -99,10 +96,10 @@ class BlockchainWallet {
    */
   static async create({ blockchain, keyManager }) {
     const { address, privateKey } = blockchain.generateKeypair();
-    const ecryptedPrivateKey = await keyManager.encrypt(privateKey);
+    const encryptedPrivateKey = await keyManager.encrypt(privateKey);
     return new BlockchainWallet({
       address,
-      privateKey: ecryptedPrivateKey,
+      privateKey: encryptedPrivateKey,
       blockchain,
       keyManager,
     });
